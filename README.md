@@ -21,9 +21,18 @@ It's a single file with no build step. Either:
 - Open `index.html` in your browser, or
 - Host it on GitHub Pages: go to **Settings > Pages**, choose your main branch and the root folder, then save.
 
+## Add it to your Home Screen
+
+Once it's hosted on GitHub Pages, open the link on your phone:
+
+- **iPhone (Safari):** tap Share, then **Add to Home Screen**.
+- **Android (Chrome):** tap the menu, then **Install app** or **Add to Home screen**.
+
+It opens full screen like an app and keeps working offline after the first visit.
+
 ## Customise
 
-All the code lives in `index.html`. To change the currency, edit the `gbp()` function and the `£` labels.
+The app lives in `index.html`. `manifest.webmanifest`, `sw.js` and the icon files handle the Home Screen install and offline use. To change the currency, edit the `gbp()` function and the `£` labels.
 
 ## Licence
 
