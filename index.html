@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Renovation Budget</title>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#eef1ef;--surface:#fff;--ink:#1f2a2e;--muted:#66767b;--line:#d6dedc;
+  --spent:#2f6f62;--planned:#d9a441;--over:#b3402f;--track:#e1e7e5;--accent:#1f2a2e;--accent-ink:#fff;
+  color-scheme:light;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#141b1d;--surface:#1c2528;--ink:#e8eeec;--muted:#93a4a8;--line:#2d393c;
+  --spent:#4fae9a;--planned:#e0b252;--over:#e27766;--track:#2a3639;--accent:#e8eeec;--accent-ink:#141b1d;color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#141b1d;--surface:#1c2528;--ink:#e8eeec;--muted:#93a4a8;--line:#2d393c;
+  --spent:#4fae9a;--planned:#e0b252;--over:#e27766;--track:#2a3639;--accent:#e8eeec;--accent-ink:#141b1d;color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 16px/1.45 Figtree,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:640px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:1.7rem;font-weight:800;margin:8px 0 4px;letter-spacing:-.02em}
+h2{font-size:1.15rem;font-weight:700;margin:28px 0 10px}
+p.sub{color:var(--muted);margin:0 0 18px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.totals{display:grid;grid-template-columns:repeat(2,1fr);gap:14px 12px;margin-top:14px}
+.totals div span{display:block;color:var(--muted);font-size:.85rem}
+.totals div b{font-size:1.25rem;font-weight:800}
+.left-ok{color:var(--spent)}.left-bad{color:var(--over)}
+.bar{height:12px;background:var(--track);border-radius:6px;overflow:hidden;display:flex;margin-top:12px}
+.bar i{display:block;height:100%}
+.bar .s{background:var(--spent)}.bar .p{background:var(--planned)}
+.bar.over .s{background:var(--over)}
+.legend{display:flex;gap:14px;font-size:.85rem;color:var(--muted);margin-top:8px;flex-wrap:wrap}
+.legend em{font-style:normal;display:inline-flex;align-items:center;gap:6px}
+.legend em:before{content:"";width:10px;height:10px;border-radius:3px;background:var(--spent)}
+.legend em.p:before{background:var(--planned)}
+.proj{display:block;width:100%;text-align:left;font:inherit;color:inherit;cursor:pointer;margin-bottom:10px}
+.proj .row{display:flex;justify-content:space-between;gap:10px;align-items:baseline}
+.proj strong{font-size:1.05rem}
+.proj .meta{color:var(--muted);font-size:.9rem}
+.proj .bar{height:8px;margin-top:10px}
+label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:4px}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;width:100%;min-height:44px}
+.fields{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+.fields .wide{grid-column:1/-1}
+button{font:inherit;cursor:pointer;border-radius:8px;min-height:44px;padding:0 16px;border:1px solid var(--line);background:var(--surface);color:var(--ink)}
+button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:700}
+button.link{border:0;background:none;padding:0 4px;min-height:44px;color:var(--muted)}
+button.danger{color:var(--over)}
+:focus-visible{outline:3px solid var(--planned);outline-offset:2px}
+.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 0;border-top:1px solid var(--line);align-items:center}
+.item:first-child{border-top:0}
+.item .d{font-weight:500}
+.item .a{font-weight:700;text-align:right}
+.item .acts{grid-column:1/-1;display:flex;gap:6px;align-items:center}
+.tag{font-size:.8rem;padding:2px 8px;border-radius:99px;border:1px solid currentColor}
+.tag.spent{color:var(--spent)}.tag.planned{color:var(--planned)}
+.empty{color:var(--muted);padding:6px 0}
+.top{display:flex;justify-content:space-between;align-items:center}
+.budget-edit{display:flex;gap:8px;align-items:end;margin-top:14px}
+.budget-edit>div{flex:1}
+</style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+(function(){
+var KEY="renovation-budget-v1";
+var state={projects:[],view:null};
+try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&Array.isArray(p.projects))state.projects=p.projects}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({projects:state.projects}))}catch(e){}}
+function uid(){return Math.random().toString(36).slice(2,10)}
+function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
+function gbp(n){var i=Math.abs(n%1)<0.005;return (n<0?"-":"")+"£"+Math.abs(n).toLocaleString("en-GB",{minimumFractionDigits:i?0:2,maximumFractionDigits:2})}
+function sums(items){var s=0,p=0;items.forEach(function(it){if(it.status==="spent")s+=it.amount;else p+=it.amount});return{s:s,p:p}}
+function bar(budget,s,p){
+  var total=s+p,max=Math.max(budget,total,1),over=total>budget&&budget>0||(budget===0&&total>0);
+  return '<div class="bar'+(over?' over':'')+'" role="img" aria-label="Spent '+gbp(s)+', planned '+gbp(p)+' of '+gbp(budget)+'"><i class="s" style="width:'+(s/max*100)+'%"></i><i class="p" style="width:'+(p/max*100)+'%"></i></div>';
+}
+function leftHtml(budget,s,p){var l=budget-s-p;return '<b class="'+(l<0?'left-bad':'left-ok')+'">'+gbp(Math.abs(l))+(l<0?' over':' left')+'</b>'}
+function num(v){var n=parseFloat(String(v).replace(/[£,\s]/g,""));return isFinite(n)&&n>=0?Math.round(n*100)/100:null}
+
+function render(){
+  var app=document.getElementById("app");
+  var proj=state.projects.find(function(x){return x.id===state.view});
+  app.innerHTML=proj?detail(proj):home();
+}
+
+function home(){
+  var B=0,S=0,P=0;
+  state.projects.forEach(function(pr){B+=pr.budget;var t=sums(pr.items);S+=t.s;P+=t.p});
+  var h='<h1>Renovation budget</h1><p class="sub">Plan each project, then track what’s spent and what’s still to come.</p>';
+  h+='<section class="card"><div class="totals"><div><span>Total budget</span><b>'+gbp(B)+'</b></div><div><span>Remaining</span>'+leftHtml(B,S,P)+'</div><div><span>Spent</span><b>'+gbp(S)+'</b></div><div><span>Planned</span><b>'+gbp(P)+'</b></div></div>'+bar(B,S,P)+'<div class="legend"><em>Spent</em><em class="p">Planned</em></div></section>';
+  h+='<h2>Projects</h2>';
+  if(!state.projects.length)h+='<p class="empty">No projects yet. Add one below, such as Kitchen or Roof.</p>';
+  state.projects.forEach(function(pr){
+    var t=sums(pr.items);
+    h+='<button class="card proj" data-act="open" data-id="'+pr.id+'"><div class="row"><strong>'+esc(pr.name)+'</strong><span class="meta">'+gbp(pr.budget)+' budget</span></div>'+bar(pr.budget,t.s,t.p)+'<div class="row meta" style="margin-top:8px"><span>'+gbp(t.s)+' spent · '+gbp(t.p)+' planned</span><span>'+gbp(Math.abs(pr.budget-t.s-t.p))+(pr.budget-t.s-t.p<0?' over':' left')+'</span></div></button>';
+  });
+  h+='<h2>Add a project</h2><form class="card fields" id="addProject"><div class="wide"><label for="pn">Project name</label><input id="pn" required maxlength="60" placeholder="Kitchen"></div><div class="wide"><label for="pb">Budget (£)</label><input id="pb" inputmode="decimal" required placeholder="12000"></div><button class="primary wide" type="submit">Add project</button></form>';
+  return h;
+}
+
+function detail(pr){
+  var t=sums(pr.items);
+  var h='<div class="top"><button class="link" data-act="back">‹ All projects</button></div><h1>'+esc(pr.name)+'</h1>';
+  h+='<section class="card"><div class="totals"><div><span>Budget</span><b>'+gbp(pr.budget)+'</b></div><div><span>Remaining</span>'+leftHtml(pr.budget,t.s,t.p)+'</div><div><span>Spent</span><b>'+gbp(t.s)+'</b></div><div><span>Planned</span><b>'+gbp(t.p)+'</b></div></div>'+bar(pr.budget,t.s,t.p)+'<div class="legend"><em>Spent</em><em class="p">Planned</em></div>';
+  h+='<form class="budget-edit" id="editBudget"><div><label for="eb">Change budget (£)</label><input id="eb" inputmode="decimal" value="'+pr.budget+'"></div><button type="submit">Save budget</button></form></section>';
+  h+='<h2>Add spending</h2><form class="card fields" id="addItem"><div class="wide"><label for="id">What is it for?</label><input id="id" required maxlength="80" placeholder="Worktops"></div><div><label for="ia">Amount (£)</label><input id="ia" inputmode="decimal" required placeholder="850"></div><div><label for="is">Status</label><select id="is"><option value="spent">Spent</option><option value="planned">Planned</option></select></div><button class="primary wide" type="submit">Add</button></form>';
+  h+='<h2>Items</h2><section class="card">';
+  if(!pr.items.length)h+='<p class="empty">Nothing recorded yet. Add what you’ve spent or plan to spend above.</p>';
+  pr.items.slice().reverse().forEach(function(it){
+    h+='<div class="item"><span class="d">'+esc(it.desc)+'</span><span class="a">'+gbp(it.amount)+'</span><div class="acts"><span class="tag '+it.status+'">'+(it.status==="spent"?"Spent":"Planned")+'</span><button class="link" data-act="toggle" data-id="'+it.id+'">'+(it.status==="spent"?"Mark as planned":"Mark as spent")+'</button><button class="link danger" data-act="delItem" data-id="'+it.id+'">Delete</button></div></div>';
+  });
+  h+='</section><p style="margin-top:24px"><button class="danger" data-act="delProject">Delete this project</button></p>';
+  return h;
+}
+
+document.addEventListener("submit",function(e){
+  e.preventDefault();var f=e.target,pr=state.projects.find(function(x){return x.id===state.view});
+  if(f.id==="addProject"){
+    var name=f.querySelector("#pn").value.trim(),b=num(f.querySelector("#pb").value);
+    if(!name||b===null){alert("Enter a project name and a budget in pounds.");return}
+    var np={id:uid(),name:name,budget:b,items:[]};state.projects.push(np);state.view=np.id;
+  }else if(f.id==="editBudget"&&pr){
+    var nb=num(f.querySelector("#eb").value);if(nb===null){alert("Enter a budget in pounds.");return}pr.budget=nb;
+  }else if(f.id==="addItem"&&pr){
+    var d=f.querySelector("#id").value.trim(),a=num(f.querySelector("#ia").value);
+    if(!d||a===null){alert("Enter a description and an amount in pounds.");return}
+    pr.items.push({id:uid(),desc:d,amount:a,status:f.querySelector("#is").value});
+  }
+  save();render();
+});
+document.addEventListener("click",function(e){
+  var b=e.target.closest("[data-act]");if(!b)return;
+  var act=b.dataset.act,pr=state.projects.find(function(x){return x.id===state.view});
+  if(act==="open"){state.view=b.dataset.id;window.scrollTo(0,0)}
+  else if(act==="back"){state.view=null;window.scrollTo(0,0)}
+  else if(act==="toggle"&&pr){pr.items.forEach(function(it){if(it.id===b.dataset.id)it.status=it.status==="spent"?"planned":"spent"})}
+  else if(act==="delItem"&&pr){pr.items=pr.items.filter(function(it){return it.id!==b.dataset.id})}
+  else if(act==="delProject"&&pr){if(!confirm("Delete “"+pr.name+"” and all its items?"))return;state.projects=state.projects.filter(function(x){return x.id!==pr.id});state.view=null}
+  save();render();
+});
+render();
+})();
+</script>
+</body>
+</html>
