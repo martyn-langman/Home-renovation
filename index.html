@@ -71,6 +71,8 @@ button.danger{color:var(--over)}
 .tag.spent{color:var(--spent)}.tag.planned{color:var(--planned)}
 .empty{color:var(--muted);padding:6px 0}
 .erow{padding:12px 0;border-top:1px solid var(--line)}.erow:first-child{border-top:0}.erow .meta{color:var(--muted);font-size:.85rem;margin-top:6px}
+.sumcap{color:var(--muted);font-size:.85rem;margin:16px 0 0}
+.ovr{padding-bottom:14px;margin-bottom:14px;border-bottom:1px solid var(--line)}
 .top{display:flex;justify-content:space-between;align-items:center}
 .budget-edit{display:flex;gap:8px;align-items:end;margin-top:14px}
 .budget-edit>div{flex:1}
@@ -81,16 +83,16 @@ button.danger{color:var(--over)}
 <script>
 (function(){
 var KEY="renovation-budget-v1";
-var state={projects:[],view:null,editing:false};
-try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&Array.isArray(p.projects))state.projects=p.projects}}catch(e){}
-function save(){try{localStorage.setItem(KEY,JSON.stringify({projects:state.projects}))}catch(e){}}
+var state={projects:[],view:null,editing:false,overall:null};
+try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&Array.isArray(p.projects))state.projects=p.projects;if(typeof p.overall==="number"&&p.overall>=0)state.overall=p.overall}}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify({projects:state.projects,overall:state.overall}))}catch(e){}}
 function uid(){return Math.random().toString(36).slice(2,10)}
 function esc(s){return String(s).replace(/[&<>"']/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]})}
 function gbp(n){var i=Math.abs(n%1)<0.005;return (n<0?"-":"")+"£"+Math.abs(n).toLocaleString("en-GB",{minimumFractionDigits:i?0:2,maximumFractionDigits:2})}
 function sums(items){var s=0,p=0;items.forEach(function(it){if(it.status==="spent")s+=it.amount;else p+=it.amount});return{s:s,p:p}}
-function bar(budget,s,p){
+function bar(budget,s,p,lbl){
   var total=s+p,max=Math.max(budget,total,1),over=total>budget&&budget>0||(budget===0&&total>0);
-  return '<div class="bar'+(over?' over':'')+'" role="img" aria-label="Spent '+gbp(s)+', planned '+gbp(p)+' of '+gbp(budget)+'"><i class="s" style="width:'+(s/max*100)+'%"></i><i class="p" style="width:'+(p/max*100)+'%"></i></div>';
+  return '<div class="bar'+(over?' over':'')+'" role="img" aria-label="'+esc(lbl||('Spent '+gbp(s)+', planned '+gbp(p)+' of '+gbp(budget)))+'"><i class="s" style="width:'+(s/max*100)+'%"></i><i class="p" style="width:'+(p/max*100)+'%"></i></div>';
 }
 function leftHtml(budget,s,p){var l=budget-s-p;return '<b class="'+(l<0?'left-bad':'left-ok')+'">'+gbp(Math.abs(l))+(l<0?' over':' left')+'</b>'}
 function num(v){var n=parseFloat(String(v).replace(/[£,\s]/g,""));return isFinite(n)&&n>=0?Math.round(n*100)/100:null}
@@ -102,14 +104,18 @@ function render(){
 }
 
 function summary(){
-  var B=0,S=0,P=0;
+  var B=0,S=0,P=0,O=state.overall;
   state.projects.forEach(function(pr){B+=pr.budget;var t=sums(pr.items);S+=t.s;P+=t.p});
-  return '<div class="totals"><div><span>Total budget</span><b>'+gbp(B)+'</b></div><div><span>Remaining</span>'+leftHtml(B,S,P)+'</div><div><span>Spent</span><b>'+gbp(S)+'</b></div><div><span>Planned</span><b>'+gbp(P)+'</b></div></div>'+bar(B,S,P)+'<div class="legend"><em>Spent</em><em class="p">Planned</em></div>';
+  if(O===null)return '<div class="totals"><div><span>Project budgets</span><b>'+gbp(B)+'</b></div><div><span>Remaining</span>'+leftHtml(B,S,P)+'</div><div><span>Spent</span><b>'+gbp(S)+'</b></div><div><span>Planned</span><b>'+gbp(P)+'</b></div></div>'+bar(B,S,P)+'<div class="legend"><em>Spent</em><em class="p">Planned</em></div>';
+  var un=O-B;
+  return '<div class="totals"><div><span>Overall budget</span><b>'+gbp(O)+'</b></div><div><span>Remaining overall</span>'+leftHtml(O,S,P)+'</div><div><span>Project budgets added up</span><b>'+gbp(B)+'</b></div><div><span>Not yet allocated</span><b class="'+(un<0?'left-bad':'left-ok')+'">'+gbp(Math.abs(un))+(un<0?' over-allocated':'')+'</b></div><div><span>Spent</span><b>'+gbp(S)+'</b></div><div><span>Planned</span><b>'+gbp(P)+'</b></div></div>'
+   +'<p class="sumcap">Spent and planned vs overall budget</p>'+bar(O,S,P)+'<div class="legend"><em>Spent</em><em class="p">Planned</em></div>'
+   +'<p class="sumcap">Project budgets vs overall budget: '+gbp(B)+' of '+gbp(O)+'</p>'+bar(O,B,0,'Project budgets '+gbp(B)+' of overall '+gbp(O));
 }
 
 function home(){
   var h='<h1>Renovation budget</h1><p class="sub">Plan each project, then track what’s spent and what’s still to come.</p>';
-  h+='<section class="card" id="summary">'+summary()+'</section>';
+  h+='<section class="card"><div class="ovr"><label for="ob">Overall renovation budget (£)</label><input id="ob" data-edit="overall" inputmode="decimal" placeholder="Optional: set a total to compare" value="'+(state.overall===null?'':state.overall)+'"></div><div id="summary">'+summary()+'</div></section>';
   h+='<div class="top" style="margin:28px 0 10px"><h2 style="margin:0">Projects</h2>'+(state.projects.length?'<button data-act="editBudgets">'+(state.editing?'Done':'Edit budgets')+'</button>':'')+'</div>';
   if(!state.projects.length)h+='<p class="empty">No projects yet. Add one below, such as Kitchen or Roof.</p>';
   if(state.editing&&state.projects.length){
@@ -185,6 +191,12 @@ document.addEventListener("change",function(e){
     if(k==="idesc"){var dv=t.value.trim();if(!dv){t.value=it.desc;return}it.desc=dv;t.value=dv}
     else{var am=num(t.value);if(am===null){t.value=it.amount;return}it.amount=am;t.value=am}
     save();var ds=document.getElementById("dsum");if(ds)ds.innerHTML=dsum(ip);return;
+  }
+  if(k==="overall"){
+    var ov=t.value.trim();
+    if(ov===""){state.overall=null}
+    else{var on=num(ov);if(on===null){t.value=state.overall===null?"":state.overall;return}state.overall=on;t.value=on}
+    save();var so=document.getElementById("summary");if(so)so.innerHTML=summary();return;
   }
   var pr=state.projects.find(function(x){return x.id===t.dataset.id});if(!pr)return;
   if(k==="name"){var v=t.value.trim();if(!v){t.value=pr.name;return}pr.name=v;t.value=v}
