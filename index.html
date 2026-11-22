@@ -61,14 +61,16 @@ button.primary{background:var(--accent);color:var(--accent-ink);border-color:var
 button.link{border:0;background:none;padding:0 4px;min-height:44px;color:var(--muted)}
 button.danger{color:var(--over)}
 :focus-visible{outline:3px solid var(--planned);outline-offset:2px}
-.item{display:grid;grid-template-columns:1fr auto;gap:2px 10px;padding:12px 0;border-top:1px solid var(--line);align-items:center}
+.item{padding:12px 0;border-top:1px solid var(--line)}
+.ifields{grid-template-columns:2fr 1fr}
 .item:first-child{border-top:0}
 .item .d{font-weight:500}
 .item .a{font-weight:700;text-align:right}
-.item .acts{grid-column:1/-1;display:flex;gap:6px;align-items:center}
+.item .acts{margin-top:6px;display:flex;gap:6px;align-items:center}
 .tag{font-size:.8rem;padding:2px 8px;border-radius:99px;border:1px solid currentColor}
 .tag.spent{color:var(--spent)}.tag.planned{color:var(--planned)}
 .empty{color:var(--muted);padding:6px 0}
+.erow{padding:12px 0;border-top:1px solid var(--line)}.erow:first-child{border-top:0}.erow .meta{color:var(--muted);font-size:.85rem;margin-top:6px}
 .top{display:flex;justify-content:space-between;align-items:center}
 .budget-edit{display:flex;gap:8px;align-items:end;margin-top:14px}
 .budget-edit>div{flex:1}
@@ -79,7 +81,7 @@ button.danger{color:var(--over)}
 <script>
 (function(){
 var KEY="renovation-budget-v1";
-var state={projects:[],view:null};
+var state={projects:[],view:null,editing:false};
 try{var raw=localStorage.getItem(KEY);if(raw){var p=JSON.parse(raw);if(p&&Array.isArray(p.projects))state.projects=p.projects}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify({projects:state.projects}))}catch(e){}}
 function uid(){return Math.random().toString(36).slice(2,10)}
@@ -99,46 +101,66 @@ function render(){
   app.innerHTML=proj?detail(proj):home();
 }
 
-function home(){
+function summary(){
   var B=0,S=0,P=0;
   state.projects.forEach(function(pr){B+=pr.budget;var t=sums(pr.items);S+=t.s;P+=t.p});
+  return '<div class="totals"><div><span>Total budget</span><b>'+gbp(B)+'</b></div><div><span>Remaining</span>'+leftHtml(B,S,P)+'</div><div><span>Spent</span><b>'+gbp(S)+'</b></div><div><span>Planned</span><b>'+gbp(P)+'</b></div></div>'+bar(B,S,P)+'<div class="legend"><em>Spent</em><em class="p">Planned</em></div>';
+}
+
+function home(){
   var h='<h1>Renovation budget</h1><p class="sub">Plan each project, then track what’s spent and what’s still to come.</p>';
-  h+='<section class="card"><div class="totals"><div><span>Total budget</span><b>'+gbp(B)+'</b></div><div><span>Remaining</span>'+leftHtml(B,S,P)+'</div><div><span>Spent</span><b>'+gbp(S)+'</b></div><div><span>Planned</span><b>'+gbp(P)+'</b></div></div>'+bar(B,S,P)+'<div class="legend"><em>Spent</em><em class="p">Planned</em></div></section>';
-  h+='<h2>Projects</h2>';
+  h+='<section class="card" id="summary">'+summary()+'</section>';
+  h+='<div class="top" style="margin:28px 0 10px"><h2 style="margin:0">Projects</h2>'+(state.projects.length?'<button data-act="editBudgets">'+(state.editing?'Done':'Edit budgets')+'</button>':'')+'</div>';
   if(!state.projects.length)h+='<p class="empty">No projects yet. Add one below, such as Kitchen or Roof.</p>';
-  state.projects.forEach(function(pr){
-    var t=sums(pr.items);
-    h+='<button class="card proj" data-act="open" data-id="'+pr.id+'"><div class="row"><strong>'+esc(pr.name)+'</strong><span class="meta">'+gbp(pr.budget)+' budget</span></div>'+bar(pr.budget,t.s,t.p)+'<div class="row meta" style="margin-top:8px"><span>'+gbp(t.s)+' spent · '+gbp(t.p)+' planned</span><span>'+gbp(Math.abs(pr.budget-t.s-t.p))+(pr.budget-t.s-t.p<0?' over':' left')+'</span></div></button>';
-  });
+  if(state.editing&&state.projects.length){
+    h+='<section class="card">';
+    state.projects.forEach(function(pr){
+      var t=sums(pr.items);
+      h+='<div class="erow"><div class="fields"><div><label for="n-'+pr.id+'">Name</label><input id="n-'+pr.id+'" data-edit="name" data-id="'+pr.id+'" maxlength="60" value="'+esc(pr.name)+'"></div><div><label for="b-'+pr.id+'">Budget (£)</label><input id="b-'+pr.id+'" data-edit="budget" data-id="'+pr.id+'" inputmode="decimal" value="'+pr.budget+'"></div></div><div class="meta">'+gbp(t.s)+' spent · '+gbp(t.p)+' planned</div></div>';
+    });
+    h+='</section>';
+  }else{
+    state.projects.forEach(function(pr){
+      var t=sums(pr.items);
+      h+='<button class="card proj" data-act="open" data-id="'+pr.id+'"><div class="row"><strong>'+esc(pr.name)+'</strong><span class="meta">'+gbp(pr.budget)+' budget</span></div>'+bar(pr.budget,t.s,t.p)+'<div class="row meta" style="margin-top:8px"><span>'+gbp(t.s)+' spent · '+gbp(t.p)+' planned</span><span>'+gbp(Math.abs(pr.budget-t.s-t.p))+(pr.budget-t.s-t.p<0?' over':' left')+'</span></div></button>';
+    });
+  }
   h+='<h2>Add a project</h2><form class="card fields" id="addProject"><div class="wide"><label for="pn">Project name</label><input id="pn" required maxlength="60" placeholder="Kitchen"></div><div class="wide"><label for="pb">Budget (£)</label><input id="pb" inputmode="decimal" required placeholder="12000"></div><button class="primary wide" type="submit">Add project</button></form>';
   return h;
+}
+
+function dsum(pr){
+  var t=sums(pr.items);
+  return '<div class="totals"><div><span>Budget</span><b>'+gbp(pr.budget)+'</b></div><div><span>Remaining</span>'+leftHtml(pr.budget,t.s,t.p)+'</div><div><span>Spent</span><b>'+gbp(t.s)+'</b></div><div><span>Planned</span><b>'+gbp(t.p)+'</b></div></div>'+bar(pr.budget,t.s,t.p)+'<div class="legend"><em>Spent</em><em class="p">Planned</em></div>';
 }
 
 function detail(pr){
   var t=sums(pr.items);
   var h='<div class="top"><button class="link" data-act="back">‹ All projects</button></div><h1>'+esc(pr.name)+'</h1>';
-  h+='<section class="card"><div class="totals"><div><span>Budget</span><b>'+gbp(pr.budget)+'</b></div><div><span>Remaining</span>'+leftHtml(pr.budget,t.s,t.p)+'</div><div><span>Spent</span><b>'+gbp(t.s)+'</b></div><div><span>Planned</span><b>'+gbp(t.p)+'</b></div></div>'+bar(pr.budget,t.s,t.p)+'<div class="legend"><em>Spent</em><em class="p">Planned</em></div>';
-  h+='<form class="budget-edit" id="editBudget"><div><label for="eb">Change budget (£)</label><input id="eb" inputmode="decimal" value="'+pr.budget+'"></div><button type="submit">Save budget</button></form></section>';
-  h+='<h2>Add spending</h2><form class="card fields" id="addItem"><div class="wide"><label for="id">What is it for?</label><input id="id" required maxlength="80" placeholder="Worktops"></div><div><label for="ia">Amount (£)</label><input id="ia" inputmode="decimal" required placeholder="850"></div><div><label for="is">Status</label><select id="is"><option value="spent">Spent</option><option value="planned">Planned</option></select></div><button class="primary wide" type="submit">Add</button></form>';
+  h+='<section class="card"><div id="dsum">'+dsum(pr)+'</div>';
+  h+='<form class="budget-edit" id="renameProject"><div><label for="rn">Project name</label><input id="rn" required maxlength="60" value="'+esc(pr.name)+'"></div><button type="submit">Rename</button></form><form class="budget-edit" id="editBudget"><div><label for="eb">Change budget (£)</label><input id="eb" inputmode="decimal" value="'+pr.budget+'"></div><button type="submit">Save budget</button></form></section>';
+  h+='<h2>Add spending</h2><form class="card fields" id="addItem"><div class="wide"><label for="idesc">What is it for?</label><input id="idesc" required maxlength="80" placeholder="Worktops"></div><div><label for="ia">Amount (£)</label><input id="ia" inputmode="decimal" required placeholder="850"></div><div><label for="is">Status</label><select id="is"><option value="spent">Spent</option><option value="planned">Planned</option></select></div><button class="primary wide" type="submit">Add</button></form>';
   h+='<h2>Items</h2><section class="card">';
   if(!pr.items.length)h+='<p class="empty">Nothing recorded yet. Add what you’ve spent or plan to spend above.</p>';
   pr.items.slice().reverse().forEach(function(it){
-    h+='<div class="item"><span class="d">'+esc(it.desc)+'</span><span class="a">'+gbp(it.amount)+'</span><div class="acts"><span class="tag '+it.status+'">'+(it.status==="spent"?"Spent":"Planned")+'</span><button class="link" data-act="toggle" data-id="'+it.id+'">'+(it.status==="spent"?"Mark as planned":"Mark as spent")+'</button><button class="link danger" data-act="delItem" data-id="'+it.id+'">Delete</button></div></div>';
+    h+='<div class="item"><div class="fields ifields"><div><label for="d-'+it.id+'">Item</label><input id="d-'+it.id+'" data-edit="idesc" data-id="'+it.id+'" maxlength="80" value="'+esc(it.desc)+'"></div><div><label for="m-'+it.id+'">Amount (£)</label><input id="m-'+it.id+'" data-edit="iamt" data-id="'+it.id+'" inputmode="decimal" value="'+it.amount+'"></div></div><div class="acts"><span class="tag '+it.status+'">'+(it.status==="spent"?"Spent":"Planned")+'</span><button class="link" data-act="toggle" data-id="'+it.id+'">'+(it.status==="spent"?"Mark as planned":"Mark as spent")+'</button><button class="link danger" data-act="delItem" data-id="'+it.id+'">Delete</button></div></div>';
   });
   h+='</section><p style="margin-top:24px"><button class="danger" data-act="delProject">Delete this project</button></p>';
   return h;
 }
 
 document.addEventListener("submit",function(e){
-  e.preventDefault();var f=e.target,pr=state.projects.find(function(x){return x.id===state.view});
-  if(f.id==="addProject"){
+  e.preventDefault();var f=e.target,fid=f.getAttribute("id"),pr=state.projects.find(function(x){return x.id===state.view});
+  if(fid==="addProject"){
     var name=f.querySelector("#pn").value.trim(),b=num(f.querySelector("#pb").value);
     if(!name||b===null){alert("Enter a project name and a budget in pounds.");return}
-    var np={id:uid(),name:name,budget:b,items:[]};state.projects.push(np);state.view=np.id;
-  }else if(f.id==="editBudget"&&pr){
+    state.projects.push({id:uid(),name:name,budget:b,items:[]});
+  }else if(fid==="renameProject"&&pr){
+    var rn=f.querySelector("#rn").value.trim();if(!rn){alert("Enter a project name.");return}pr.name=rn;
+  }else if(fid==="editBudget"&&pr){
     var nb=num(f.querySelector("#eb").value);if(nb===null){alert("Enter a budget in pounds.");return}pr.budget=nb;
-  }else if(f.id==="addItem"&&pr){
-    var d=f.querySelector("#id").value.trim(),a=num(f.querySelector("#ia").value);
+  }else if(fid==="addItem"&&pr){
+    var d=f.querySelector("#idesc").value.trim(),a=num(f.querySelector("#ia").value);
     if(!d||a===null){alert("Enter a description and an amount in pounds.");return}
     pr.items.push({id:uid(),desc:d,amount:a,status:f.querySelector("#is").value});
   }
@@ -147,12 +169,27 @@ document.addEventListener("submit",function(e){
 document.addEventListener("click",function(e){
   var b=e.target.closest("[data-act]");if(!b)return;
   var act=b.dataset.act,pr=state.projects.find(function(x){return x.id===state.view});
-  if(act==="open"){state.view=b.dataset.id;window.scrollTo(0,0)}
-  else if(act==="back"){state.view=null;window.scrollTo(0,0)}
+  if(act==="editBudgets"){state.editing=!state.editing}
+  else if(act==="open"){state.editing=false;state.view=b.dataset.id;window.scrollTo(0,0)}
+  else if(act==="back"){state.editing=false;state.view=null;window.scrollTo(0,0)}
   else if(act==="toggle"&&pr){pr.items.forEach(function(it){if(it.id===b.dataset.id)it.status=it.status==="spent"?"planned":"spent"})}
   else if(act==="delItem"&&pr){pr.items=pr.items.filter(function(it){return it.id!==b.dataset.id})}
   else if(act==="delProject"&&pr){if(!confirm("Delete “"+pr.name+"” and all its items?"))return;state.projects=state.projects.filter(function(x){return x.id!==pr.id});state.view=null}
   save();render();
+});
+document.addEventListener("change",function(e){
+  var t=e.target,k=t.dataset&&t.dataset.edit;if(!k)return;
+  if(k==="idesc"||k==="iamt"){
+    var ip=state.projects.find(function(x){return x.id===state.view});
+    var it=ip&&ip.items.find(function(x){return x.id===t.dataset.id});if(!it)return;
+    if(k==="idesc"){var dv=t.value.trim();if(!dv){t.value=it.desc;return}it.desc=dv;t.value=dv}
+    else{var am=num(t.value);if(am===null){t.value=it.amount;return}it.amount=am;t.value=am}
+    save();var ds=document.getElementById("dsum");if(ds)ds.innerHTML=dsum(ip);return;
+  }
+  var pr=state.projects.find(function(x){return x.id===t.dataset.id});if(!pr)return;
+  if(k==="name"){var v=t.value.trim();if(!v){t.value=pr.name;return}pr.name=v;t.value=v}
+  else{var n=num(t.value);if(n===null){t.value=pr.budget;return}pr.budget=n;t.value=n}
+  save();var sm=document.getElementById("summary");if(sm)sm.innerHTML=summary();
 });
 render();
 if("serviceWorker" in navigator&&location.protocol.indexOf("http")===0){window.addEventListener("load",function(){try{navigator.serviceWorker.register("sw.js").catch(function(){})}catch(e){}})}

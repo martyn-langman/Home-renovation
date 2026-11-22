@@ -5,6 +5,8 @@ A simple, free budgeting app for home renovations. Add projects, set a budget fo
 ## Features
 
 - Add projects (Kitchen, Roof, Bathroom...) each with its own budget
+- Rename projects, and edit the name or amount of any item, any time
+- Set every project's budget at once from the home screen with **Edit budgets**
 - Record items as **Spent** or **Planned**, and switch between the two as bills get paid
 - See budget, spent, planned and remaining for each project and across everything
 - Works on phones and desktops, with light and dark mode
